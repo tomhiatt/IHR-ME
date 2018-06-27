@@ -30,7 +30,7 @@ ihrar %>% gather(X,"capacity") %>% head()
 ###############################################
 
 # Define country to look at
-ciso <- "VUT"
+ciso <- "VNM"
 cty <- n %>% filter(iso3==ciso) %>% select(country) %>% head(1) %>% as.character()
 
 
@@ -52,6 +52,10 @@ ihrc <- ihr %>% separate(var, c("Capacity", "Year"), "-") %>% left_join(coreg, b
 ihrc %>% filter(iso3==ciso) %>% ggplot(aes(Year, Score, group=Capacity)) + geom_point(size=0.8) + geom_line(size=1) + facet_wrap(~Capacity, ncol=3) + labs(x="", title=paste("IHR annual reporting scores for", ihrc[ihrc$iso3==ciso, "Country"][1])) + theme(text=element_text(size=12))
 
 ggsave(paste0("D:/Users/hiattt/delete/ARgraph_", ciso, ".png"), width = 5, height = 6)
+
+# 2017 scores only
+ihrc %>% filter(iso3==ciso, Year==2017) 
+ihrc %>% filter(iso3==ciso, Year==2017) %>% arrange(-Score) 
 
 # Compare countries
 ihrc %>% filter(Year==2017, g_whoregion=="WPR", !is.na(Score)) %>% ggplot(aes(Score, iso3, group=iso3)) + geom_point() + facet_wrap(~Capacity) 
@@ -107,7 +111,7 @@ inc <- WDI(extra = TRUE, end=2018) %>% filter(year==2017) %>% select(iso3=iso3c,
 jea <- jeaa %>% left_join(inc)
 
 # reshape data and split variable names
-jec <- jea %>% filter(!is.na(Year.JEE.conducted)) %>% select(income, WHO.region, Country, P.1.1:RE.2) %>% gather(Indicator, Score, -income, -WHO.region, -Country) %>% mutate(Area4=str_extract(Indicator, "([A-Z]|[a-z])+"), Element=str_extract(Indicator, "[0-9]+")) %>% 
+jec <- jea %>% filter(!is.na(Year.JEE.conducted)) %>% select(income, WHO.region, Country, iso3, P.1.1:RE.2) %>% gather(Indicator, Score, -income, -WHO.region, -Country, -iso3) %>% mutate(Area4=str_extract(Indicator, "([A-Z]|[a-z])+"), Element=str_extract(Indicator, "[0-9]+")) %>% 
   mutate(Area2=if_else(Area4 %in% c("PoE", "CE", "RE"), "Other", Area4)) %>% 
   mutate(Area=factor(Area2, levels=c("P", "D", "R", "Other"), labels = c("Prevent", "Detect", "Respond", "Other")))
 
@@ -142,23 +146,23 @@ jeg %>% filter(Country==cty) %>% group_by(Country, Area, Element) %>% summarise(
   ggplot(aes(Element, Score, color=Entity, group=Element)) + geom_bar(stat = "identity", position="dodge") + facet_wrap(~Area, nrow=1) + theme_fivethirtyeight() # This one's a failure
 
 # With Areas and Elements together
-jeg %>% filter(Country==cty) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
   mutate(Entity=Country) %>% bind_rows(jeh) %>% 
   ggplot(aes(paste(Area, Element, sep=": "), Score, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="") + coord_flip() + geom_line()
 
 # This time with elements only
-jeg %>% filter(Country==cty) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
   mutate(Entity=Country) %>% bind_rows(jeh) %>% 
   ggplot(aes(Element, Score, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="") + coord_flip() + geom_line()
 
 # Ordered by Score for clarity
-jeg %>% filter(Country==cty) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
   mutate(Entity=Country) %>% bind_rows(jeh) %>% 
   ggplot(aes(reorder(Element, Score), Score, color=Entity, group=Entity)) + geom_point(size=1) + labs(color="", x="Element") + coord_flip() + geom_line()
 
 ### Compare with only countries from the same income group
 # Get the income group of the selected country
-ctyincome <- jea %>% filter(Country==cty) %>% select(income) %>% as.character()
+ctyincome <- jea %>% filter(iso3==ciso) %>% select(income) %>% as.character()
 
 # summarise by income and region and Element
 jek <- jeg %>% filter(income==ctyincome) %>% group_by(WHO.region, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) # NA's removed from UR Tanz
@@ -169,11 +173,22 @@ jem <- jel %>% filter(WHO.region %in% c("WPR", "Global")) %>% mutate(Entity=WHO.
 
 # Plot comparing country vs region vs global by same income
 
-jeg %>% filter(Country==cty) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
   mutate(Entity=Country) %>% bind_rows(jem) %>% 
   mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
   ggplot(aes(Element, Score, color=Entity, group=Entity, shape=Entity)) + geom_point(size=2) + labs(color="", shape="", x="", title=paste("JEE score comparison\n for", cty, "and other\n", ctyincome, "countries")) + coord_flip() 
 ggsave(paste0("D:/Users/hiattt/delete/JEEgraph_", ciso, ".png"), width = 7, height = 6)
+
+# Compare difference from global average
+jen <- jem %>% select(-WHO.region) %>% spread(Entity, Score) %>% mutate(WPR_diff=WPR-Global)
+
+jeo <- jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% inner_join(jen) %>% mutate(Country_diff=Score-Global, Global_diff=0) %>% gather(Entity, Difference, WPR_diff, Country_diff, Global_diff) %>% transmute(Entity=str_replace(Entity, "_diff", ""), Entity=if_else(Entity=="Country", Country, Entity), Element=Element, Difference)
+
+jeo %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
+  ggplot(aes(Element, Difference, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="", shape="", x="", title=paste("JEE score difference\n for", cty, "compared to the \nglobal mean of other\n", ctyincome, "countries")) + coord_flip() 
+
+jeo %>% filter(Entity!="WPR", Entity!="Global") %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
+  ggplot(aes(Element, Difference)) + geom_bar(stat="identity") + labs(y="Difference in scores", x="", title=paste0("JEE score difference \nfor ", cty, " compared to the \nglobal mean of other\n", ctyincome, " countries")) + coord_flip() 
 
 
 ### Annex table
