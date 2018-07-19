@@ -30,7 +30,7 @@ ihrar %>% gather(X,"capacity") %>% head()
 ###############################################
 
 # Define country to look at
-ciso <- "VNM"
+ciso <- "KOR"
 cty <- n %>% filter(iso3==ciso) %>% select(country) %>% head(1) %>% as.character()
 
 
@@ -44,12 +44,12 @@ data_neck <- ihrar[2,]
 data_hn <- paste(data_head, data_neck, sep="-")
 colnames(ihrar) <- data_hn
 colnames(ihrar)[1] <- "Country"
-ihr <- ihrar %>% slice(3:nrow(ihrar)) %>% gather(Country)
-colnames(ihr) <- c("Country", "var", "value")
-ihrc <- ihr %>% separate(var, c("Capacity", "Year"), "-") %>% left_join(coreg, by=c(Country="country")) %>% filter(g_whoregion %in% c("SEA", "WPR"))  %>% mutate(Year= as.numeric(Year), Score=as.numeric(value), Capacity=factor(Capacity, levels=c("Legislation", "Coordination", "Surveillance", "Response",  "Preparedness", "Risk communication", "Human resources", "Laboratory", "Points of entry", "Zoonosis", "Food safety", "Chemical", "Radionuclear")))
+ihr <- ihrar %>% slice(3:nrow(ihrar)) %>% gather(var, value, -Country)
+# colnames(ihr) <- c("Country", "var", "value")
+ihrc <- ihr %>% separate(var, c("Capacity", "Year"), "-") %>% left_join(coreg, by=c(Country="country")) %>% filter(g_whoregion %in% c("SEA", "WPR"))  %>% mutate(Year= as.numeric(Year), Score=as.numeric(value), Capacity=factor(Capacity, levels=c("Legislation", "Coordination", "Surveillance", "Response",  "Preparedness", "Risk communication", "Human resources", "Laboratory", "Points of entry", "Zoonosis", "Food safety", "Chemical", "Radionuclear", "Crude average")))
 
 # Look at specific country
-ihrc %>% filter(iso3==ciso) %>% ggplot(aes(Year, Score, group=Capacity)) + geom_point(size=0.8) + geom_line(size=1) + facet_wrap(~Capacity, ncol=3) + labs(x="", title=paste("IHR annual reporting scores for", ihrc[ihrc$iso3==ciso, "Country"][1])) + theme(text=element_text(size=12))
+ihrc %>% filter(iso3==ciso) %>% ggplot(aes(Year, Score, group=Capacity)) + geom_point(size=0.8) + geom_line(size=1) + facet_wrap(~Capacity, ncol=3) + labs(x="", title=paste("IHR annual reporting scores for", head(ihrc[ihrc$iso3==ciso, "Country"],1))) + theme(text=element_text(size=12))
 
 ggsave(paste0("D:/Users/hiattt/delete/ARgraph_", ciso, ".png"), width = 5, height = 6)
 
@@ -70,14 +70,14 @@ data_neck <- ihrar[2,]
 data_hn <- paste(data_head, data_neck, sep="")
 colnames(ihrar) <- data_hn
 colnames(ihrar)[1] <- "WHOregion"
-ihr <- ihrar %>% slice(3:nrow(ihrar)) %>% gather(WHOregion)
+ihr <- ihrar %>% slice(3:nrow(ihrar)) %>% gather(var, value, -WHOregion)
 colnames(ihr) <- c("WHOregion", "var", "value")
 ihrb <- ihr %>% separate(var, c("Capacity", "Year"), " 2") %>% mutate(Year= as.numeric(paste(2, Year, sep="")), Score=as.numeric(value)) %>% filter(WHOregion %in% c("South-East Asia", "Western Pacific"))
 
 # plot
 caps <- c("Legislation", "Coordination", "Surveillance", "Response", 
           "Preparedness", "Risk communication", "Human resources", "Laboratory", 
-          "Points of entry", "Zoonosis", "Food safety", "Chemical", "Radionuclear")
+          "Points of entry", "Zoonosis", "Food safety", "Chemical", "Radionuclear", "Crude average")
 
 ihrb %>% filter(Capacity %in% caps[1:6]) %>% ggplot(aes(Year, Score, group=WHOregion)) + geom_line(size=1.5) + facet_grid(Capacity~WHOregion) + labs(x="") + theme_hc() + theme(text=element_text(size=16))
 
@@ -91,13 +91,13 @@ ihrc %>% filter(!is.na(Score)) %>% group_by(g_whoregion, Year) %>% summarise(Rep
 ihrc.int <- ihrc %>% group_by(g_whoregion, Country, Capacity) %>% arrange(g_whoregion, Country, Capacity, Year) %>% mutate(ScoreM=na.approx(Score, rule=2))
 
 p1 <- ihrc.int %>% group_by(g_whoregion, Capacity, Year) %>% summarise(Scorex=mean(ScoreM))
-p2 <- p1 %>% group_by(g_whoregion, Year) %>% summarise(Scorex=mean(Scorex), Capacity="Crude average") %>% bind_rows(p1) %>% mutate(Capacity=factor(Capacity, levels = c(unique(p1$Capacity), "Crude average")))
+p2 <- p1 %>% group_by(g_whoregion, Year) %>% summarise(Scorex=mean(Scorex), Capacity="Crude average") %>% transform(Capacity=factor(Capacity, levels=caps)) %>% bind_rows(p1)
 
 p2 %>% ggplot(aes(Year, Scorex, alpha=Capacity, color=Capacity, size=Capacity), group=g_whoregion) + geom_line() + facet_grid(~g_whoregion) + labs(x="", y="Average score") + theme_hc() + theme(text=element_text(size=16)) + scale_size_manual(values=c(rep(1,13), 2)) + scale_color_manual(values=c(rep("black",13), "lime green")) 
 
 #combined sea and wpr
 p11 <- ihrc.int %>% group_by(Capacity, Year) %>% summarise(Scorex=mean(ScoreM))
-p12 <- p11 %>% group_by(Year) %>% summarise(Scorex=mean(Scorex), Capacity="Crude average") %>% bind_rows(p11) %>% mutate(Capacity=factor(Capacity, levels = c(unique(p1$Capacity), "Crude average"))) 
+p12 <- p11 %>% group_by(Year) %>% summarise(Scorex=mean(Scorex), Capacity="Crude average")  %>% transform(Capacity=factor(Capacity, levels=caps)) %>% bind_rows(p11)
 p12 %>% 
   ggplot(aes(Year, Scorex, alpha=Capacity, color=Capacity, size=Capacity)) + geom_line() + labs(x="", y="Average score") + theme_hc() + theme(text=element_text(size=16)) + scale_size_manual(values=c(rep(1,13), 2)) + scale_color_manual(values=c(rep("black",13), "lime green")) 
 
@@ -189,6 +189,8 @@ jeo %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>%
 
 jeo %>% filter(Entity!="WPR", Entity!="Global") %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
   ggplot(aes(Element, Difference)) + geom_bar(stat="identity") + labs(y="Difference in scores", x="", title=paste0("JEE score difference \nfor ", cty, " compared to the \nglobal mean of other\n", ctyincome, " countries")) + coord_flip() 
+
+ggsave(paste0("D:/Users/hiattt/delete/JEEgraph2_", ciso, ".png"), width = 7, height = 6)
 
 
 ### Annex table
