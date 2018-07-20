@@ -103,7 +103,7 @@ p12 %>%
 
 #############################################
 # JEE score analysis
-jeaa <- read.csv("M:/Private/IHR/IHR M&E/JEE final report/JEE worldwide summary statistics 25May2018.csv", header = TRUE, stringsAsFactors = FALSE)
+jeaa <- read.csv("M:/Private/IHR/IHR M&E/JEE final report/JEE worldwide summary statistics 25May2018.csv", header = TRUE, stringsAsFactors = FALSE) 
 
 # Get World Bank country classification
 inc <- WDI(extra = TRUE, end=2018) %>% filter(year==2017) %>% select(iso3=iso3c, income)
