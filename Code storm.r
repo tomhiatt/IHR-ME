@@ -1,5 +1,14 @@
-libraries(c("ggplot2", "dplyr", "tidyr", "stringr", "ggthemes", "readr", "zoo", "WDI"))
-runprofile()
+# libraries(c("ggplot2", "dplyr", "tidyr", "stringr", "ggthemes", "readr", "zoo", "WDI"))
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggthemes)
+library(readr)
+library(zoo)
+library(WDI)
+
+# runprofile()
 
 # up to 2016 data
 data <- read_csv("D:/Users/hiattt/Downloads/data.csv")
