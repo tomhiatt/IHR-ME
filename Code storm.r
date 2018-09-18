@@ -8,7 +8,7 @@ library(readr)
 library(zoo)
 library(WDI)
 
-# runprofile()
+runprofile()
 
 # up to 2016 data
 data <- read_csv("D:/Users/hiattt/Downloads/data.csv")
@@ -39,7 +39,7 @@ ihrar %>% gather(X,"capacity") %>% head()
 ###############################################
 
 # Define country to look at
-ciso <- "KOR"
+ciso <- "FSM"
 cty <- n %>% filter(iso3==ciso) %>% select(country) %>% head(1) %>% as.character()
 
 

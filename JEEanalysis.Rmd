@@ -1,0 +1,185 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+JEE Analysis
+Questions
+1.	Where have JEEs been conducted?
+a.	Which countries are finished?
+b.	Which are underway?
+c.	Which still need to happen?
+d.	When did these happen?
+2.	What areas have the highest and lowest relative scores? What is the mean score?
+a.	Compared with like countries globally
+b.	Compared with like countries regionally
+c.	For the region as a whole
+d.	For the region compared with other regions
+e.	For the region compared with globally
+3.	What are the common recommendations grouped by income status?
+a.	For each focus area
+b.	Overall
+c.	How do they cluster?
+4.	How should we prioritize our technical support?
+5.	Weighted scores?
+6.	Many countries still struggling with all-hazard public health preparedness plan, how many for national laboratory quality standards, fetp, (many recs for improving sustainability). Can we pick up some themes? Common themes for group of countries? (eg PNG, PHL or KHM, LAO similar issues). 
+7.	Can we combine with AR reports?
+
+```{r setup}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggthemes)
+library(readr)
+library(zoo)
+library(WDI)
+
+options(stringsAsFactors = FALSE)
+
+# Define country to look at
+ciso <- "MNG"
+```
+
+# Joint External Evaluations
+
+## Background
+
+```{r JEE bg}
+jeaa <- read.csv("data/JEE worldwide summary statistics 25May2018.csv", header = TRUE, stringsAsFactors = FALSE) 
+
+# Get World Bank country classification
+inc <- WDI(extra = TRUE, end=2018) %>% filter(year==2017) %>% select(iso3=iso3c, income)
+
+jea <- jeaa %>% left_join(inc)
+
+```
+
+
+JEEs have been conducted in 9 countries in the Region.
+
+
+```{r pocket}
+
+#############################################
+# JEE score analysis
+
+# reshape data and split variable names
+jec <- jea %>% filter(!is.na(Year.JEE.conducted)) %>% select(income, WHO.region, Country, iso3, P.1.1:RE.2) %>% gather(Indicator, Score, -income, -WHO.region, -Country, -iso3) %>% mutate(Area4=str_extract(Indicator, "([A-Z]|[a-z])+"), Element=str_extract(Indicator, "[0-9]+")) %>% 
+  mutate(Area2=if_else(Area4 %in% c("PoE", "CE", "RE"), "Other", Area4)) %>% 
+  mutate(Area=factor(Area2, levels=c("P", "D", "R", "Other"), labels = c("Prevent", "Detect", "Respond", "Other")))
+
+# pull in file to map Indicators to names
+jef <- read.csv("D:/Users/hiattt/OneDrive - World Health Organization/Work files/Requests/M & E/JEE/AR areas.csv", stringsAsFactors = FALSE) %>% select(-Area)
+
+jeg <- jec %>% select(-Element) %>% left_join(jef) %>% mutate(Element=factor(Element, levels=unique(jef$Element)))
+
+# summarise by Area and WHO region
+jed <- jec %>% group_by(WHO.region, Area) %>% summarise(Score=mean(Score, na.rm=TRUE)) # NA's removed from UR Tanz
+
+# Make a global summary
+jee <- jec %>% group_by(Area) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% mutate(WHO.region="Global") %>% bind_rows(jed)
+
+# summarise again, this time by element and WHO region
+jei <- jeg %>% group_by(WHO.region, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) # NA's removed from UR Tanz
+
+jej <- jeg %>% group_by(Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% mutate(WHO.region="Global") %>% bind_rows(jei)
+
+# regional cat fight for who's the best
+jee %>% ggplot(aes(Area, Score, color=WHO.region, group=WHO.region)) + geom_line(size=1.5) + theme_fivethirtyeight()
+jee %>% ggplot(aes(Area, Score, fill=WHO.region, group=WHO.region)) + geom_bar(stat = "identity", position="dodge") + theme_fivethirtyeight()
+
+### Country comparison
+
+# Create subset with aggregate WPR and Global
+jeh <- jej %>% filter(WHO.region %in% c("WPR", "Global")) %>% mutate(Entity=WHO.region)
+
+# With Areas and Elements together
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+  mutate(Entity=Country) %>% bind_rows(jeh) %>% 
+  ggplot(aes(paste(Area, Element, sep=": "), Score, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="") + coord_flip() + geom_line()
+
+# This time with elements only
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+  mutate(Entity=Country) %>% bind_rows(jeh) %>% 
+  ggplot(aes(Element, Score, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="") + coord_flip() + geom_line()
+
+# Ordered by Score for clarity
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+  mutate(Entity=Country) %>% bind_rows(jeh) %>% 
+  ggplot(aes(reorder(Element, Score), Score, color=Entity, group=Entity)) + geom_point(size=1) + labs(color="", x="Element") + coord_flip() + geom_line()
+
+### Compare with only countries from the same income group
+# Get the income group of the selected country
+ctyincome <- jea %>% filter(iso3==ciso) %>% select(income) %>% as.character() 
+
+# summarise by income and region and Element
+jek <- jeg %>% filter(income==ctyincome) %>% group_by(WHO.region, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) # NA's removed from UR Tanz
+
+jel <- jeg %>% filter(income==ctyincome) %>% group_by(Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% mutate(WHO.region="Global") %>% bind_rows(jek)
+
+jem <- jel %>% filter(WHO.region %in% c("WPR", "Global")) %>% mutate(Entity=WHO.region)
+
+# Plot comparing country vs region vs global by same income
+
+jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% 
+  mutate(Entity=Country) %>% bind_rows(jem) %>% 
+  mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
+  ggplot(aes(Element, Score, color=Entity, group=Entity, shape=Entity)) + geom_point(size=2) + labs(color="", shape="", x="", title=paste("JEE score comparison\n for", ciso, "and other\n", ctyincome, "countries")) + coord_flip() 
+
+# Compare difference from global average
+jen <- jem %>% select(-WHO.region) %>% spread(Entity, Score) %>% mutate(WPR_diff=WPR-Global)
+
+jeo <- jeg %>% filter(iso3==ciso) %>% group_by(Country, Area, Element) %>% summarise(Score=mean(Score, na.rm=TRUE)) %>% inner_join(jen) %>% mutate(Country_diff=Score-Global, Global_diff=0) %>% gather(Entity, Difference, WPR_diff, Country_diff, Global_diff) %>% transmute(Entity=str_replace(Entity, "_diff", ""), Entity=if_else(Entity=="Country", Country, Entity), Element=Element, Difference)
+
+jeo %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
+  ggplot(aes(Element, Difference, color=Entity, group=Entity)) + geom_point(size=2) + labs(color="", shape="", x="", title=paste("JEE score difference\n for", ciso, "compared to the \nglobal mean of other\n", ctyincome, "countries")) + coord_flip() 
+
+jeo %>% filter(Entity!="WPR", Entity!="Global") %>% mutate(Element = factor(Element, levels = rev(levels(Element)))) %>% 
+  ggplot(aes(Element, Difference)) + geom_bar(stat="identity") + labs(y="Difference in scores", x="", title=paste0("JEE score difference \nfor ", ciso, " compared to the \nglobal mean of other\n", ctyincome, " countries")) + coord_flip() 
+
+```
+
+What are the common recommendations grouped by income status?
+a.	For each focus area
+b.	Overall
+c.	How do they cluster?
+
+## Recommendations
+
+```{r JEE recs}
+reca <- read.csv("data/Recommendation Expanded with tagging.csv", skip = 1, stringsAsFactors = FALSE) %>% filter(!is.na(ISO3), ISO3!="")
+
+
+```
+
+### High-level recommendations
+
+Of the `r length(unique(reca$ISO3))` JEEs conducted so far in the Region, `r nrow(reca)` high-level recommendations were issued. These recommendations covered the following major areas.
+
+```{r hi rec plot}
+reca %>% select(ISO3, contains("TAG"), Rec.num) %>% gather(key, value, -ISO3, -Rec.num) %>% filter(!is.na(value), value!="") %>% 
+  ggplot(aes(ISO3, value, color=Rec.num)) + geom_point() + labs(
+    title="Areas of high-level recommendations", 
+    y="Area of recommendation",
+    x="Country code",
+    color="Rec. \nnum")
+
+# reca %>% select(ISO3, contains("TAG")) %>% gather(key, value, -ISO3) %>% filter(!is.na(value)) %>% 
+  # ggplot(aes(ISO3, value)) + geom_point()
+```
+
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
